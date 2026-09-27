@@ -1,0 +1,10 @@
+# ---- runtime ---------------------------------------------------------------
+PyYAML>=6.0            # config/regions.yaml
+opencv-python>=4.8     # segmentation, template matching, calibration GUI
+mss>=9.0               # screen capture
+numpy>=1.24            # image arrays
+treys>=0.1.8           # Monte Carlo equity
+
+# ---- overlay only ----------------------------------------------------------
+PySide6>=6.5           # `poker.py overlay`
+keyboard>=0.4          # optional: space/esc hotkeys through the click-through overlay

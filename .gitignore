@@ -1,0 +1,23 @@
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# calibrate.py grab output - local screenshots, not part of the project
+samples/
+
+# regions.yaml backups written by `calibrate.py reset`
+config/regions.yaml.bak-*
+
+# ad-hoc diagnostics
+_probe*
+_*.png
+!unmarked-images/*.png
+
+# editors / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

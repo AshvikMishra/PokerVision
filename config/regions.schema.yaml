@@ -1,0 +1,71 @@
+# ============================================================================
+#  Monopoly Poker table assistant - region map
+#  Edit with: python calibrate.py mark | set | nudge | clear | verify | list
+#
+#  COORDINATE SPACE
+#    Every rect is {x, y, w, h} in ABSOLUTE VIRTUAL-DESKTOP PIXELS, top-left
+#    origin - the pixel grid of the PNG that `calibrate.py grab` saves. Never
+#    normalized 0-1 fractions. All rects must fall inside the rectangle of the
+#    monitor named under `capture.monitor` (`calibrate.py list` prints those).
+#
+#  UNSET VALUES
+#    {x: 0, y: 0, w: 0, h: 0} means "not calibrated yet". Perception skips
+#    zero-sized ROIs instead of raising.
+#
+#  TILT
+#    `angle` is an optional deskew in degrees, positive = counter-clockwise.
+#    It is applied to the cropped ROI before any glyph work, so a card that
+#    sits rotated on the table is straightened first. 0 means axis-aligned.
+# ============================================================================
+
+version: 1
+
+# ---- capture ----------------------------------------------------------------
+capture:
+  # mss monitor index. 0 = the whole virtual desktop, 1 = first display, etc.
+  monitor: 0
+  fps: 10
+
+# ---- cards ------------------------------------------------------------------
+hero:
+  # Your two hole cards, left then right.
+  hole_cards:
+    - {x: 0, y: 0, w: 0, h: 0} # left hole card
+    - {x: 0, y: 0, w: 0, h: 0} # right hole card
+
+board:
+  # The five community cards in flop / turn / river order.
+  slots:
+    - {x: 0, y: 0, w: 0, h: 0} # flop 1
+    - {x: 0, y: 0, w: 0, h: 0} # flop 2
+    - {x: 0, y: 0, w: 0, h: 0} # flop 3
+    - {x: 0, y: 0, w: 0, h: 0} # turn
+    - {x: 0, y: 0, w: 0, h: 0} # river
+
+# ---- money ------------------------------------------------------------------
+texts:
+  pot: {x: 0, y: 0, w: 0, h: 0}         # total pot
+  to_call: {x: 0, y: 0, w: 0, h: 0}     # amount you must call
+  hero_stack: {x: 0, y: 0, w: 0, h: 0}   # your chips behind
+
+# ---- perception tuning ------------------------------------------------------
+# rank_region is a FRACTION of a card box (0-1), written as a list so the
+# calibration tool does not mistake it for a pixel rect. The rank glyph is
+# always the top-left element of a card; these bounds stop the big centre
+# pip, the card border and the hand-strength banner being read as it.
+perception:
+  rank_region: [0.00, 0.00, 0.95, 0.75]   # x, y, w, h
+
+  # Two correlation thresholds over the same learned shapes, doing different
+  # jobs. `cluster_score` is used once by `poker.py learn` to decide which
+  # glyphs are the same shape, so it is high and decisive. `match_score` is
+  # used at runtime to decide whether a glyph is close enough to name, so it
+  # is lower and cautious - a wrong card is far worse than an honest "?".
+  # Measured on unmarked-images: same-character 0.94, different-character 0.51.
+  cluster_score: 0.90
+  match_score: 0.80
+
+  # Learned prototypes, written by `python poker.py learn` from your own
+  # screenshots. Nothing is uploaded and no template pack ships with this repo.
+  templates: templates/glyphs.npz
+  digits: templates/digits.npz
