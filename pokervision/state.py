@@ -10,12 +10,14 @@ from .perception import Card, CardReader
 
 
 @dataclass
-class Hand:
+class Reading:
+    """What one frame of the calibrated path saw. A description of pixels, not
+    an opinion about them."""
+
     hole: list[Card] = field(default_factory=list)
     board: list[Card] = field(default_factory=list)
     pot: int | None = None
     hero_stack: int | None = None
-    to_call: int | None = None
 
     @property
     def hole_codes(self) -> list[str]:
@@ -29,6 +31,13 @@ class Hand:
     def street(self) -> str:
         return {0: "preflop", 3: "flop", 4: "turn", 5: "river"}.get(
             len(self.board_codes), f"{len(self.board_codes)} board cards")
+
+    @property
+    def complete(self) -> bool:
+        """Both hole cards and at most five board cards, all of them named."""
+        return (len(self.hole) == 2
+                and len(self.board) <= 5
+                and not self.problems)
 
     @property
     def problems(self) -> list[str]:
@@ -49,21 +58,34 @@ class Hand:
         b = " ".join(self.board_codes) or "(none)"
         return f"hole [{h}]  board [{b}]"
 
+    def money(self) -> list[str]:
+        out = []
+        if self.pot is not None:
+            out.append(f"pot {self.pot:,}")
+        if self.hero_stack is not None:
+            out.append(f"stack {self.hero_stack:,}")
+        return out
 
-def build_state(reader: CardReader, frame: np.ndarray, cap: Capture,
-                cfg: Config) -> Hand:
-    return Hand(
+
+def read_frame(reader: CardReader, frame: np.ndarray, cap: Capture,
+              cfg: Config) -> Reading:
+    return Reading(
         hole=reader.read_hero(frame, cap),
         board=reader.read_board(frame, cap),
         pot=reader.read_money(frame, cap, cfg.pot),
         hero_stack=reader.read_money(frame, cap, cfg.hero_stack),
-        to_call=reader.read_money(frame, cap, cfg.to_call),
     )
 
 
-class HandTracker:
+class ReadingTracker:
     """Nothing is believed until it repeats for a few frames, and a read only
-    counts as a new hand if the board shrank or the hole cards changed."""
+    counts as a new table state if the board shrank or the hole cards changed.
+
+    This is a *stability* filter, not a decision. It exists because a single
+    frame of template matching is noisy: a glyph halfway matched reads as a
+    different card. Requiring the same read N frames running removes almost all
+    of that flicker without inventing anything.
+    """
 
     def __init__(self, stable_frames: int = 3):
         self.stable_frames = stable_frames
@@ -73,20 +95,20 @@ class HandTracker:
         self.hits = 0
 
     @staticmethod
-    def _signature(hand: Hand) -> tuple:
-        return (tuple(hand.hole_codes), tuple(hand.board_codes))
+    def _signature(r: Reading) -> tuple:
+        return (tuple(r.hole_codes), tuple(r.board_codes))
 
-    def update(self, hand: Hand) -> str:
-        if not hand.hole and not hand.board:
-            sig = self._signature(hand)
+    def update(self, r: Reading) -> str:
+        if not r.hole and not r.board:
+            sig = self._signature(r)
             if self.committed is None:
                 self.committed = sig
             return "waiting"
-        if hand.problems:
+        if r.problems:
             self.candidate, self.hits = None, 0
             return "unstable"
 
-        sig = self._signature(hand)
+        sig = self._signature(r)
         if sig == self.candidate:
             self.hits += 1
         else:

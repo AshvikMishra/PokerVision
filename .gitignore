@@ -8,6 +8,12 @@ venv/
 # calibrate.py grab output - local screenshots, not part of the project
 samples/
 
+# per-machine window selections, written by the GUI's Selection button
+config/selections.json
+
+# python bytecode for the test package
+tests/__pycache__/
+
 # regions.yaml backups written by `calibrate.py reset`
 config/regions.yaml.bak-*
 

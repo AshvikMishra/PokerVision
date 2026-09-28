@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import regions_config as rc
+from . import regions as rc
 
 REPO = Path(__file__).resolve().parent.parent
 

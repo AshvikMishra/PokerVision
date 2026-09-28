@@ -23,7 +23,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-import regions_config as rc
+from pokervision import regions as rc
 
 REPO_ROOT = Path(__file__).resolve().parent
 SAMPLES = REPO_ROOT / "samples"
@@ -93,7 +93,6 @@ def cmd_doctor(args) -> int:
         ("cv2", "calibration GUI + template matching"),
         ("mss", "screen capture"),
         ("numpy", "image arrays"),
-        ("treys", "Monte Carlo equity"),
     ]:
         try:
             mod = __import__(module)

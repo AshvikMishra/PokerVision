@@ -1,3 +1,4 @@
+import _boot  # noqa: F401,E402  - repo root on sys.path, cwd at root
 """Recognition regression test.
 
 The 15 screenshots in unmarked-images/ have hand-written ground truth (see
@@ -13,7 +14,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-import poker as poker
+import pokervision as pv
 
 # file stem -> (board cards in slot order, hero cards)
 GROUND_TRUTH = {
@@ -48,25 +49,25 @@ def collect_tagged(cfg):
             continue
         board, hero = GROUND_TRUTH[stem]
         frame = cv2.imread(path)
-        cap = poker.Capture.offline()
+        cap = pv.Capture.offline()
         for i, r in enumerate(list(cfg.board_slots) + list(cfg.hero_slots)):
             truth = (board + hero)[i]
             crop = cap.crop(frame, r)
-            if not poker.is_dealt(crop):
+            if not pv.is_dealt(crop):
                 if truth is not None:
                     print(f"  MISSED a dealt card: {stem} slot{i} = {truth}")
                 continue
             if truth is None:
                 print(f"  FALSE POSITIVE: {stem} slot{i} read as a card but is empty")
                 continue
-            rm = poker.pick_rank_glyph(crop, cfg)
-            pm = poker.pick_corner_pip(crop, cfg)
+            rm = pv.pick_rank_glyph(crop, cfg)
+            pm = pv.pick_corner_pip(crop, cfg)
             if rm is not None:
-                rank.append((poker.rasterise(crop, rm), truth))
+                rank.append((pv.rasterise(crop, rm), truth))
             else:
                 print(f"  no rank glyph: {stem} slot{i} = {truth}")
             if pm is not None:
-                pip.append((poker.rasterise(crop, pm), truth))
+                pip.append((pv.rasterise(crop, pm), truth))
             else:
                 print(f"  no corner pip: {stem} slot{i} = {truth}")
     return rank, pip
@@ -76,7 +77,7 @@ def separation(pairs, key):
     same, diff = [], []
     for i in range(len(pairs)):
         for j in range(i + 1, len(pairs)):
-            s = poker.corr(pairs[i][0], pairs[j][0])
+            s = pv.corr(pairs[i][0], pairs[j][0])
             (same if key(pairs[i][1]) == key(pairs[j][1]) else diff).append(s)
     return same, diff
 
@@ -91,7 +92,7 @@ def leave_one_out(pairs, key):
         for j, (mj, tj) in enumerate(pairs):
             if i == j:
                 continue
-            s = poker.corr(m, mj)
+            s = pv.corr(m, mj)
             if s > best:
                 best, bj = s, j
         if bj is None:
@@ -109,8 +110,8 @@ def scored_against_truth(cfg):
     """Full-pipeline accuracy: every dealt card, read and compared to truth."""
     r_ok = r_bad = s_ok = s_bad = 0
     misses = []
-    bank = poker.GlyphBank(cfg.templates, cfg.match_score).load()
-    cap = poker.Capture.offline()
+    bank = pv.GlyphBank(cfg.templates, cfg.match_score).load()
+    cap = pv.Capture.offline()
     slots = list(cfg.board_slots) + list(cfg.hero_slots)
     for path in sorted(glob.glob("unmarked-images/*.png")):
         stem = Path(path).stem
@@ -123,15 +124,15 @@ def scored_against_truth(cfg):
             if truth is None:
                 continue
             window = cap.crop(frame, r)
-            found = poker.locate_card(window)
+            found = pv.locate_card(window)
             if found is None:
                 r_bad += 1
                 misses.append(f"RANK {stem[:40]:42s} slot{i} no card found")
                 continue
             fx, fy, fw, fh = found
             crop = window[fy:fy + fh, fx:fx + fw]
-            rank, _, _ = bank.match(poker.rasterise(crop, poker.pick_rank_glyph(crop, cfg)))
-            suit, _, _ = bank.match(poker.rasterise(crop, poker.pick_corner_pip(crop, cfg)))
+            rank, _, _ = bank.match(pv.rasterise(crop, pv.pick_rank_glyph(crop, cfg)))
+            suit, _, _ = bank.match(pv.rasterise(crop, pv.pick_corner_pip(crop, cfg)))
             if rank == truth[0]:
                 r_ok += 1
             else:
@@ -146,7 +147,7 @@ def scored_against_truth(cfg):
 
 
 def main() -> int:
-    cfg = poker.Config.load()
+    cfg = pv.Config.load()
     r_ok, r_bad, s_ok, s_bad, misses = scored_against_truth(cfg)
     print(f"\nend-to-end vs ground truth:  rank {r_ok}/{r_ok + r_bad}"
           f"   suit {s_ok}/{s_ok + s_bad}")

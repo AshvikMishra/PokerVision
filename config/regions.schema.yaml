@@ -1,5 +1,5 @@
 # ============================================================================
-#  Monopoly Poker table assistant - region map
+#  PokerVision - region map
 #  Edit with: python calibrate.py mark | set | nudge | clear | verify | list
 #
 #  COORDINATE SPACE
@@ -57,7 +57,7 @@ perception:
   rank_region: [0.00, 0.00, 0.95, 0.75]   # x, y, w, h
 
   # Two correlation thresholds over the same learned shapes, doing different
-  # jobs. `cluster_score` is used once by `poker.py learn` to decide which
+  # jobs. `cluster_score` is used once by `python -m pokervision learn` to decide which
   # glyphs are the same shape, so it is high and decisive. `match_score` is
   # used at runtime to decide whether a glyph is close enough to name, so it
   # is lower and cautious - a wrong card is far worse than an honest "?".
@@ -65,7 +65,7 @@ perception:
   cluster_score: 0.90
   match_score: 0.80
 
-  # Learned prototypes, written by `python poker.py learn` from your own
+  # Learned prototypes, written by `python -m pokervision learn` from your own
   # screenshots. Nothing is uploaded and no template pack ships with this repo.
   templates: templates/glyphs.npz
   digits: templates/digits.npz

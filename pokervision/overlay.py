@@ -11,12 +11,11 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPainter, QColor, QFont, QPen
 from PySide6.QtWidgets import QApplication, QWidget
 
-import regions_config as rc
+from . import regions as rc
 from .config import Config
-from .capture import Capture
+from .capture import Capture, WindowCapture
 from .perception import Card, CardReader, GlyphBank
-from .state import Hand, build_state
-from .decision import Advice, advise
+from .state import Reading, read_frame
 
 GREY = QColor(110, 110, 110)
 YELLOW = QColor(255, 210, 0)
@@ -57,11 +56,10 @@ def _harden_click_through(win_id: int) -> None:
 
 
 class OverlayWindow(QWidget):
-    def __init__(self, cfg: Config, cap: Capture, reader: CardReader, sims: int):
+    def __init__(self, cfg: Config, cap: Capture, reader: CardReader):
         super().__init__()
-        self.cfg, self.cap, self.reader, self.sims = cfg, cap, reader, sims
-        self.hand: Hand | None = None
-        self.advice: Advice | None = None
+        self.cfg, self.cap, self.reader = cfg, cap, reader
+        self.reading: Reading | None = None
         self.paused = False
         self.tracker = RectTracker()
 
@@ -84,9 +82,7 @@ class OverlayWindow(QWidget):
         if self.paused:
             return
         frame = self.cap.get_frame()
-        self.hand = build_state(self.reader, frame, self.cap, self.cfg)
-        self.advice = (Advice("WAIT", "card read is incomplete")
-                       if self.hand.problems else advise(self.hand, sims=self.sims))
+        self.reading = read_frame(self.reader, frame, self.cap, self.cfg)
         self.update()
 
     def _local(self, r: rc.Rect):
@@ -119,57 +115,68 @@ class OverlayWindow(QWidget):
         sub = f"r{c.rank_score:.2f}/{c.rank_margin:.2f}\ns{c.suit_score:.2f}/{c.suit_margin:.2f}"
         self._box_xywh(p, x, y, w, h, GREEN if c.code else YELLOW, label, sub)
 
-    def _advice_panel(self, p: QPainter) -> None:
-        if self.advice is None:
+    def _status_panel(self, p: QPainter) -> None:
+        """What was read, and how much of it can be trusted.
+
+        The green/amber split is on the read, not on a verdict: amber means
+        the read is incomplete, which on this calibrated path means a glyph did
+        not match. Nothing here recommends an action.
+        """
+        r = self.reading
+        if r is None:
             return
-        colours = {"RAISE": GREEN, "CHECK": YELLOW, "CALL": YELLOW,
-                   "FOLD": QColor(240, 80, 80), "WAIT": QColor(190, 190, 190)}
-        colour = colours.get(self.advice.action, WHITE)
-        w, h = min(620, max(360, self.width() - 24)), 70
+        ok = r.complete
+        colour = GREEN if ok else YELLOW
+        problems = r.problems
+        h = 56 if not problems else min(150, 56 + 16 * len(problems))
+        w = min(660, max(380, self.width() - 24))
         x, y = 12, min(52, max(12, self.height() - h - 12))
         p.setBrush(QColor(20, 18, 16, 210)); p.setPen(QPen(colour, 2))
         p.drawRoundedRect(x, y, w, h, 6, 6)
-        p.setFont(QFont("Segoe UI", 16, QFont.Bold)); p.setPen(QPen(colour))
-        p.drawText(x + 14, y + 32, self.advice.action)
+        p.setFont(QFont("Segoe UI", 12, QFont.Bold)); p.setPen(QPen(colour))
+        p.drawText(x + 14, y + 24,
+                   "read complete" if ok else "read incomplete")
         p.setFont(QFont("Segoe UI", 9)); p.setPen(QPen(WHITE))
-        p.drawText(x + 150, y + 24, self.advice.reason[:78])
-        if self.advice.equity is not None:
-            details = f"equity {self.advice.equity:.1%}"
-            if self.advice.pot_odds:
-                details += f"   pot odds {self.advice.pot_odds:.1%}"
-            p.setPen(QPen(QColor(210, 210, 210)))
-            p.drawText(x + 150, y + 46, details)
+        p.drawText(x + 150, y + 24, r.describe())
+        for i, line in enumerate(problems[:5]):
+            p.setPen(QPen(YELLOW))
+            p.drawText(x + 150, y + 44 + 16 * i, line[:86])
 
     def paintEvent(self, event):
-        if self.hand is None:
+        if self.reading is None:
             return
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         for i, r in enumerate(self.cfg.board_slots):
             self._card(p, f"board{i}", r,
-                       next((c for c in self.hand.board if c.slot == i), None))
+                       next((c for c in self.reading.board if c.slot == i), None))
         for i, r in enumerate(self.cfg.hero_slots):
             self._card(p, f"hole{i}", r,
-                       next((c for c in self.hand.hole if c.slot == i), None))
-        for label, r, value in (("pot", self.cfg.pot, self.hand.pot),
-                                ("stack", self.cfg.hero_stack, self.hand.hero_stack),
-                                ("to call", self.cfg.to_call, self.hand.to_call)):
+                       next((c for c in self.reading.hole if c.slot == i), None))
+        for label, r, value in (("pot", self.cfg.pot, self.reading.pot),
+                                ("stack", self.cfg.hero_stack,
+                                 self.reading.hero_stack)):
             if r is not None:
                 txt = f"{label} {value:,}" if value is not None else f"{label} ?"
                 self._box(p, r, GREEN if value is not None else YELLOW, txt)
         p.setFont(QFont("Segoe UI", 12, QFont.Bold)); p.setPen(QPen(WHITE))
-        p.drawText(12, 28, self.hand.describe() + f"   [{self.hand.street}]")
-        self._advice_panel(p)
+        p.drawText(12, 28,
+                   self.reading.describe() + f"   [{self.reading.street}]")
+        self._status_panel(p)
 
 
-def cmd_overlay_gui(cfg: Config, sims: int = 20000) -> int:
+def cmd_overlay_gui(cfg: Config, window: str | None = None,
+                    monitor: int | None = None) -> int:
     if not cfg.templates.exists():
-        print("No learned glyphs yet. Run:  python poker.py learn --images unmarked-images")
+        print("No learned glyphs yet. Run:  "
+              "python -m pokervision learn --images unmarked-images")
         return 1
-    cap = Capture(cfg)
+    from .cli import pick_capture, describe_source
+    cap = pick_capture(cfg, window, monitor)
+    print(f"source  : {describe_source(cap)}")
     reader = CardReader(cfg, GlyphBank(cfg.templates, cfg.match_score).load())
     app = QApplication(sys.argv)
-    win = OverlayWindow(cfg, cap, reader, sims)
+    win = OverlayWindow(cfg, cap, reader)
     win.show()
 
     try:

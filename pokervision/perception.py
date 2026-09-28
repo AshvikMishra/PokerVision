@@ -6,7 +6,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-import regions_config as rc
+from . import regions as rc
 from .config import Config
 from .capture import Capture
 

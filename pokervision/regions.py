@@ -17,7 +17,9 @@ from typing import Any, Iterator, NamedTuple
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parent
+# this module lives in the package, so the repository
+# root is one level up - not the package directory
+REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG = REPO_ROOT / "config" / "regions.yaml"
 
 RECT_KEYS = frozenset({"x", "y", "w", "h"})
